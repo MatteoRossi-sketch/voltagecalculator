@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Electroadhesion Force Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: input rail on the left; readouts, layer cross-section and one chart stacked on the right. Phones show readouts first. */
+:root {
+  --bg: #EDF0F3;
+  --surface: #FFFFFF;
+  --field: #F3F5F8;
+  --ink: #131E29;
+  --muted: #566676;
+  --line: #D4DBE2;
+  --accent: #C4690A;      /* Kapton amber */
+  --accent-ink: #8C4300;
+  --kapton: #E9A23B;
+  --copper: #B4552D;      /* positive electrode */
+  --blue: #3B6E98;        /* negative electrode, comparison series */
+  --coat: #A9BFD1;
+  --sub: #DCE2E8;
+  --steel: #8D9AA7;
+  --on-fill: #FFFFFF;
+  --good: #1D7A4D;
+  --bad: #B3261E;
+  --f-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --f-body: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E141A; --surface: #151D25; --field: #1B252F; --ink: #E7EDF2; --muted: #94A3B1; --line: #263340;
+    --accent: #F2A33A; --accent-ink: #F5B65E; --kapton: #D9912C; --copper: #E08A5C; --blue: #6FAEDB;
+    --coat: #4B6378; --sub: #22303C; --steel: #607080; --on-fill: #0E141A; --good: #52C48E; --bad: #F4786F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E141A; --surface: #151D25; --field: #1B252F; --ink: #E7EDF2; --muted: #94A3B1; --line: #263340;
+  --accent: #F2A33A; --accent-ink: #F5B65E; --kapton: #D9912C; --copper: #E08A5C; --blue: #6FAEDB;
+  --coat: #4B6378; --sub: #22303C; --steel: #607080; --on-fill: #0E141A; --good: #52C48E; --bad: #F4786F;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+sup, sub { font-size: .6em; line-height: 0; }
+
+.app { max-width: 1120px; margin: 0 auto; padding-block: 28px 56px; padding-inline: clamp(16px, 4vw, 32px); }
+.head { margin-bottom: 20px; }
+.head h1 { margin: 0 0 6px; font: 700 clamp(1.7rem, 4.2vw, 2.3rem)/1.1 var(--f-display); letter-spacing: -0.02em; text-wrap: balance; }
+.head p { margin: 0; max-width: 62ch; color: var(--muted); }
+
+.grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "results" "inputs" "viz"; }
+@media (min-width: 900px) {
+  .grid { grid-template-columns: 340px minmax(0, 1fr); grid-template-areas: "inputs results" "inputs viz"; align-items: start; }
+}
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.results { grid-area: results; }
+.inputs { grid-area: inputs; }
+.viz { grid-area: viz; display: flex; flex-direction: column; gap: 18px; }
+
+/* inputs */
+fieldset { border: 0; margin: 0; padding: 0 0 14px; min-width: 0; }
+legend { padding: 0 0 6px; font: 600 11px/1.2 var(--f-body); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 6.6rem 2.5rem; column-gap: 8px; align-items: center; min-height: 38px; }
+.row label { font-size: 14px; line-height: 1.25; }
+.sym { font: 400 12px var(--f-mono); color: var(--muted); margin-left: 2px; }
+.unit { font: 400 12px var(--f-mono); color: var(--muted); }
+input[type=number], select {
+  width: 100%; height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--field); color: var(--ink); font: 500 14px var(--f-mono);
+}
+input[type=number] { text-align: right; -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+select { grid-column: 2 / 4; font-family: var(--f-body); font-weight: 500; }
+.row.off { opacity: .42; }
+.hint { margin: -2px 0 4px; font-size: 12px; color: var(--muted); }
+.ghost { font: 500 13px var(--f-body); color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.ghost:hover { color: var(--ink); border-color: var(--muted); }
+
+/* results */
+.readouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px 20px; }
+.lbl { font: 600 11px/1.2 var(--f-body); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.val { font: 600 clamp(1.9rem, 4.6vw, 2.6rem)/1.05 var(--f-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.readouts .unit, .load .unit { font: 400 12px/1.4 var(--f-body); color: var(--muted); margin-top: 4px; }
+.load { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.load-head { font: 600 15px var(--f-display); margin-bottom: 12px; }
+.load-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 20px; }
+.val2 { font: 600 1.55rem/1.1 var(--f-display); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.val2.alt { color: var(--blue); }
+.val2.strip { color: var(--accent-ink); }
+.verdict { display: flex; align-items: center; gap: 8px; margin: 14px 0 0; font-weight: 500; }
+.verdict::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--good); flex: none; }
+.verdict.bad::before { background: var(--bad); }
+.verdict.ok { color: var(--good); }
+.verdict.bad { color: var(--bad); }
+.muted { color: var(--muted); margin: 0; }
+.err { margin: 0; color: var(--bad); font-weight: 500; }
+
+/* viz */
+.viz h2 { margin: 0 0 8px; font: 600 11px/1.2 var(--f-body); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.viz svg { display: block; max-width: 100%; }
+.cap { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+.chart-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.chart-head h2 { margin: 0; }
+.tabs { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: var(--field); }
+.tabs button { font: 500 13px var(--f-body); padding: 6px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 18px; border-top: 3px solid var(--accent); vertical-align: middle; margin-right: 6px; }
+.legend .l-alt::before { border-top: 2px dashed var(--blue); }
+.legend .l-ref::before { border-top: 2px dotted var(--muted); }
+.legend .l-pt::before { width: 9px; height: 9px; border: 2px solid var(--ink); border-radius: 50%; background: var(--surface); }
+.stale { opacity: .45; }
+.tbl-wrap { overflow-x: auto; margin: 0 -2px; padding: 0 2px; }
+table.bench { width: 100%; border-collapse: collapse; font: 500 12.5px var(--f-mono); font-variant-numeric: tabular-nums; }
+table.bench th { padding: 6px 8px; text-align: right; font: 600 10.5px/1.25 var(--f-body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.bench td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.bench th:first-child, table.bench td:first-child { text-align: left; }
+table.bench td.hi { color: var(--accent-ink); font-weight: 600; }
+table.bench td.bad { color: var(--bad); font-weight: 600; }
+.fitrow { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chart-empty { display: grid; place-items: center; min-height: 200px; color: var(--muted); text-align: center; padding: 16px; }
+
+/* svg parts */
+.ax { fill: var(--muted); font: 11px var(--f-mono); }
+.gl { stroke: var(--line); stroke-width: 1; }
+.tk, .axl { stroke: var(--muted); stroke-width: 1; }
+.s-main { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.s-strip { fill: none; stroke: var(--accent-ink); stroke-width: 2.5; stroke-dasharray: 7 4; stroke-linejoin: round; }
+.s-band { fill: var(--accent); fill-opacity: .13; stroke: none; }
+.legend .l-strip::before { border-top: 3px dashed var(--accent-ink); }
+.pt-uni { fill: var(--surface); stroke: var(--blue); stroke-width: 2; }
+.legend .l-uni::before { width: 9px; height: 9px; border: 2px solid var(--blue); border-radius: 50%; background: var(--surface); }
+.legend .l-fill::before { width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--accent); }
+.legend .l-band::before { border-top: 0; height: 10px; background: var(--accent); opacity: .22; }
+.verdict.mid::before { background: var(--accent); }
+.verdict.mid { color: var(--accent-ink); }
+.s-alt { fill: none; stroke: var(--blue); stroke-width: 2; stroke-dasharray: 6 4; stroke-linejoin: round; }
+.ref { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.pt-fill { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.pt-data { fill: var(--blue); stroke: var(--surface); stroke-width: 1.5; }
+.legend .l-dot::before { width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--blue); }
+input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+input[readonly] { color: var(--muted); background: transparent; }
+.pt-ring { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.lt { fill: var(--ink); font: 500 12px var(--f-body); }
+.sv-film { fill: var(--kapton); } .sv-cond { fill: var(--steel); } .sv-gap { fill: var(--field); stroke: var(--line); }
+.sv-coat { fill: var(--coat); } .sv-sub { fill: var(--sub); } .sv-pos { fill: var(--copper); } .sv-neg { fill: var(--blue); }
+.sv-sign { fill: var(--on-fill); font: 700 12px var(--f-mono); }
+.sv-dim { stroke: var(--ink); stroke-width: 1; }
+.sv-lab { fill: var(--ink); font: 500 12px var(--f-body); }
+.sv-sym { fill: var(--ink); font: italic 12px var(--f-mono); paint-order: stroke; stroke: var(--sub); stroke-width: 4px; stroke-linejoin: round; }
+.sv-cen { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 3; opacity: .7; }
+
+/* model notes */
+.model { margin-top: 16px; }
+.model summary { cursor: pointer; font-weight: 600; }
+.model ul { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); max-width: 78ch; }
+.model b { color: var(--ink); font-weight: 600; }
+</style>
+<style>:root{color-scheme:light}body{margin:0}</style>
+</head>
+<body>
+
+<main class="app">
+  <header class="head">
+    <h1>Electroadhesion Force Calculator</h1>
+    <p>Holding pressure of a coplanar interdigitated-electrode pad over a layered dielectric stack, with the voltage needed to hold a given payload. The film touches the electrodes over part of the area and sits at a roughness gap over the rest. Change any value and everything updates.</p>
+  </header>
+
+  <div class="grid">
+    <section class="card results" id="results" aria-live="polite">
+      <div id="res-ok">
+        <div class="readouts">
+          <div><div class="lbl">Pressure</div><div class="val" id="o-p"></div><div class="unit">Pa, mean over the grip area</div></div>
+          <div><div class="lbl">Force</div><div class="val" id="o-f"></div><div class="unit">mN at <span id="o-v"></span> V</div></div>
+          <div><div class="lbl">Equivalent load</div><div class="val" id="o-gf"></div><div class="unit" id="o-gf-u"></div></div>
+        </div>
+        <div class="load" id="load"></div>
+      </div>
+      <p class="err" id="res-err" hidden></p>
+    </section>
+
+    <form class="card inputs" id="form" autocomplete="off" novalidate></form>
+
+    <section class="card viz" id="viz">
+      <div>
+        <h2>Bench comparison</h2>
+        <div class="tbl-wrap"><table class="bench" id="bench"></table></div>
+        <div class="fitrow"><button type="button" id="fit4" class="ghost">Fit φ to tests 1–4</button><button type="button" id="fit6" class="ghost">Fit φ to all six</button></div>
+        <p class="cap" id="bench-cap"></p>
+      </div>
+      <div>
+        <h2>Layer stack</h2>
+        <div id="stack"></div>
+        <p class="cap" id="stack-cap"></p>
+      </div>
+      <div>
+        <div class="chart-head">
+          <h2>Sweep</h2>
+          <div class="tabs" role="group" aria-label="Chart view">
+            <button type="button" id="tab-a" aria-pressed="true">Voltage vs. payload</button>
+            <button type="button" id="tab-b" aria-pressed="false">Voltage vs. roughness gap</button>
+          </div>
+        </div>
+        <div id="chart"></div>
+        <div class="legend" id="legend"></div>
+        <p class="cap" id="chart-note"></p>
+      </div>
+    </section>
+  </div>
+
+  <details class="card model">
+    <summary>About the model</summary>
+    <ul>
+      <li><b>Geometry.</b> The electrodes are modelled by their cross-section: parallel strips of width w (edge to edge) separated by gaps s, alternating +V/2 and −V/2 on the plane z = 0. The pitch p = w + s is the centre-to-centre distance between neighbouring electrodes, and the period is L = 2p. Electrodes are infinitely thin. The real pad has the same section but a more complex electrode layout in plan. The model assumes that section holds everywhere over the grip area, and it does not include finger ends, bends or bus bars.</li>
+      <li><b>Stack.</b> Above the electrodes: coating, then the gap between the electrode surface and the target, then the target (floating conductor, film of thickness t, or a dielectric halfspace). Below: a substrate halfspace.</li>
+      <li><b>Interface.</b> The film does not lie at one gap. Over a fraction φ of the grip area it is in contact with the electrode surface and a nanometre-scale gap g<sub>c</sub> remains. Over the rest it rests on the roughness peaks, at a gap g<sub>r</sub> of micrometres. Each part is solved with the field model on its own and the pressure is the area-weighted mean, P = V² [ φ P₁(g<sub>c</sub>) + (1 − φ) P₁(g<sub>r</sub>) ], where P₁ is the pressure per V². This treats the two kinds of area as independent patches, each much larger than its own gap and much smaller than the pitch. φ is a bearing-area fraction: it can be measured from a profilometer trace, or from a contact test, and it is the one empirical input.</li>
+      <li><b>Solution.</b> A per-harmonic admittance for the layered medium, a mixed boundary-value problem (potential fixed on fingers, charge free in the gaps) solved by Galerkin with ten edge-singular Chebyshev terms, and pressure from virtual work, P = −(ε₀/4) Σ φₙ² dYₙ/dg. Odd harmonics are summed to n = 480,001. The sum is cut off there, so gaps below about 5 nm read a few percent low (about 3 % at 1 nm).</li>
+      <li><b>Voltage.</b> Linear electrostatics makes pressure exactly proportional to V², so the required voltage is solved in closed form.</li>
+      <li><b>Why not one gap.</b> A single effective gap of 24 nm reproduced the first four bench tests, but manufactured electrodes are 3.2 to 10 µm rough, and at those gaps alone the field model needs 970 to 1,300 V/√g against the 480 to 510 V/√g measured. No area fraction fixes that, because it would have to exceed 1. The bench forces are 4 to 7 times larger than the roughness gap allows for the first four tests, and 2 to 4 times for the last two. Part of the film must be much closer to the electrodes than the roughness suggests. The two-level interface says so explicitly, and φ is how much.</li>
+      <li><b>Comparison with the bench.</b> With g<sub>c</sub> = 1 nm and g<sub>r</sub> from 3.2 to 10 µm, tests 1 to 4 need φ = 0.59 to 0.73, and φ = 0.64 reproduces them within an rms error of 3 % in voltage. Tests 5 and 6 need φ = 0.21 to 0.30, and at φ = 0.64 the bench needs about 28 % more voltage than the model. Between 3.2 and 10 µm the answer for φ barely moves, which is why it can be quoted without knowing the roughness exactly. It does depend on g<sub>c</sub>: going from 1 to 2 nm raises it by about 0.04. The model does not explain why φ drops for the two heaviest payloads: more voltage should press the film harder onto the electrodes, not less. A load-dependent area, peeling at the payload edge or a change in how the film is held are candidates, and none is modelled here. The unipolar tests need 5 to 14 % more voltage than the bipolar ones, which the model cannot show because it sees only the voltage difference.</li>
+      <li><b>What φ can hide.</b> φ absorbs anything that lowers the force relative to full contact: real contact area, an area that does not take part in the grip, and charge that adds to or subtracts from the field. A fitted φ is a calibration of the model against the bench, not a measured contact area, until it is checked against a profilometer or a contact test. A φ of 0.6 on a 50 µm film pressed by a few pascals is high, and that should be tested.</li>
+      <li><b>Single-harmonic comparison.</b> Uses payload weight over the free gripping area, adds the film thickness to the coating depth, takes the coating permittivity, and uses the roughness gap with no contact. It is compared with the model at the entered φ.</li>
+    </ul>
+  </details>
+</main>
+
+<script>
+// <core>
+const EPS0 = 8.854187817e-12;
+const G_EARTH = 9.80665;
+
+// One hyperbolic transmission-line step. Yload === null means a perfect conductor behind the layer.
+function layerStep(k, Yload, eps, t) {
+  const n = k.length, out = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const Y0 = eps * k[i], T = Math.tanh(k[i] * t);
+    out[i] = Yload === null ? Y0 / T : Y0 * (Yload[i] + Y0 * T) / (Y0 + Yload[i] * T);
+  }
+  return out;
+}
+
+// Admittance (per unit eps0) of everything above the electrode plane.
+function admittance(k, d, epsR, g, target, epsT, tFilm) {
+  let Y;
+  if (target === 'conductor') Y = null;
+  else if (target === 'halfspace') { Y = new Float64Array(k.length); for (let i = 0; i < k.length; i++) Y[i] = epsT * k[i]; }
+  else if (target === 'film') Y = layerStep(k, k, epsT, tFilm);
+  else throw new Error('target must be conductor | film | halfspace');
+  Y = layerStep(k, Y, 1.0, g);
+  if (d > 0) Y = layerStep(k, Y, epsR, d);
+  return Y;
+}
+
+// Hankel asymptotic expansion of J_nu(x), accurate for x >= 25 and nu = 0, 1.
+function hankelJ(nu, x) {
+  const mu = 4 * nu * nu;
+  let P = 1, Q = 0, ak = 1;
+  for (let k = 1; k <= 30; k++) {
+    const next = ak * (mu - (2 * k - 1) * (2 * k - 1)) / (8 * k * x);
+    if (k > 1 && Math.abs(next) > Math.abs(ak)) break;
+    ak = next;
+    if (k % 2) Q += ((k - 1) / 2 % 2 === 0 ? 1 : -1) * ak;
+    else P += (k / 2 % 2 === 0 ? 1 : -1) * ak;
+    if (Math.abs(ak) < 1e-17) break;
+  }
+  const chi = x - (nu / 2 + 0.25) * Math.PI;
+  return Math.sqrt(2 / (Math.PI * x)) * (P * Math.cos(chi) - Q * Math.sin(chi));
+}
+
+// J_0, J_2, ..., J_{2(nb-1)} at x. Miller backward recurrence below 25, Hankel + forward recurrence above.
+function besselEven(x, nb) {
+  const maxOrd = 2 * (nb - 1), out = new Float64Array(nb);
+  if (x < 25) {
+    if (x === 0) { out[0] = 1; return out; }
+    let N = Math.ceil(Math.max(maxOrd, x) + 40); if (N % 2) N++;
+    const tmp = new Float64Array(maxOrd + 1);
+    let jp = 0, jc = 1e-30, sum = jc;
+    for (let n = N; n >= 1; n--) {
+      const jm = (2 * n / x) * jc - jp;
+      jp = jc; jc = jm;
+      const m = n - 1;
+      if (m <= maxOrd) tmp[m] = jc;
+      if (m >= 2 && m % 2 === 0) sum += jc;
+      if (Math.abs(jc) > 1e100) {
+        jc *= 1e-100; jp *= 1e-100; sum *= 1e-100;
+        for (let q = 0; q <= maxOrd; q++) tmp[q] *= 1e-100;
+      }
+    }
+    const norm = tmp[0] + 2 * sum;
+    for (let j = 0; j < nb; j++) out[j] = tmp[2 * j] / norm;
+    return out;
+  }
+  let a = hankelJ(0, x), b = hankelJ(1, x);
+  out[0] = a;
+  for (let n = 1; n < maxOrd; n++) {
+    const c = (2 * n / x) * b - a;
+    a = b; b = c;
+    if ((n + 1) % 2 === 0) out[(n + 1) / 2] = c;
+  }
+  return out;
+}
+
+function solveLinear(A, b) {
+  const n = b.length, M = A.map((r, i) => { const row = new Float64Array(n + 1); row.set(r); row[n] = b[i]; return row; });
+  for (let c = 0; c < n; c++) {
+    let p = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    const tmp = M[c]; M[c] = M[p]; M[p] = tmp;
+    const piv = M[c][c];
+    if (!isFinite(piv) || piv === 0) throw new Error('singular system');
+    for (let r = c + 1; r < n; r++) {
+      const f = M[r][c] / piv;
+      for (let q = c; q <= n; q++) M[r][q] -= f * M[c][q];
+    }
+  }
+  const x = new Float64Array(n);
+  for (let i = n - 1; i >= 0; i--) {
+    let s = M[i][n];
+    for (let q = i + 1; q < n; q++) s -= M[i][q] * x[q];
+    x[i] = s / M[i][i];
+  }
+  return x;
+}
+
+// Harmonic amplitudes phi_n of the electrode-plane potential (mixed BVP, Galerkin).
+function planePotential(V, w, s, Ytot, k, nb) {
+  const N = k.length, L = 2 * (w + s), pref = Math.PI * w / 2, a = new Float64Array(N * nb);
+  for (let i = 0; i < N; i++) {
+    const J = besselEven(k[i] * w / 2, nb);
+    for (let j = 0; j < nb; j++) a[i * nb + j] = pref * (j % 2 ? -1 : 1) * J[j];
+  }
+  const M = Array.from({ length: nb }, () => new Float64Array(nb));
+  for (let i = 0; i < N; i++) {
+    const inv = 1 / Ytot[i];
+    for (let j = 0; j < nb; j++) {
+      const aj = a[i * nb + j] * inv;
+      for (let l = j; l < nb; l++) M[j][l] += aj * a[i * nb + l];
+    }
+  }
+  for (let j = 0; j < nb; j++) for (let l = j; l < nb; l++) { M[j][l] *= 4 / L; M[l][j] = M[j][l]; }
+  const rhs = new Float64Array(nb); rhs[0] = (V / 2) * pref;
+  const c = solveLinear(M, rhs), phi = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    let sg = 0;
+    for (let j = 0; j < nb; j++) sg += a[i * nb + j] * c[j];
+    phi[i] = (4 / L) * sg / Ytot[i];
+  }
+  return phi;
+}
+
+// Mean attractive pressure [Pa] over the pad. geom is in SI: {w, s, d, epsR, g, target, epsT, tFilm, epsSub}.
+function pressure(V, geom, nb = 10) {
+  const { w, s, d, epsR, g, target, epsT, tFilm, epsSub } = geom;
+  const p = w + s;
+  const tmin = Math.min(...[g, d, target === 'film' ? tFilm : 1.0].filter(x => x > 0));
+  const nmax = Math.floor(Math.min(480001, Math.max(2001, 14 * p / (Math.PI * tmin))));
+  const count = Math.floor((nmax - 1) / 2) + 1, k = new Float64Array(count);
+  for (let i = 0; i < count; i++) k[i] = (2 * i + 1) * Math.PI / p;
+  const Yup = gg => admittance(k, d, epsR, gg, target, epsT, tFilm);
+  const Yg = Yup(g), Ytot = new Float64Array(count);
+  for (let i = 0; i < count; i++) Ytot[i] = Yg[i] + epsSub * k[i];
+  const phi = planePotential(V, w, s, Ytot, k, nb);
+  const h = g * 1e-4, Yp = Yup(g + h), Ym = Yup(g - h);
+  let acc = 0;
+  for (let i = 0; i < count; i++) acc += phi[i] * phi[i] * (Yp[i] - Ym[i]) / (2 * h);
+  return -0.25 * EPS0 * acc;
+}
+
+// Earlier single-harmonic formula, kept for comparison only.
+function legacyVoltage(P, p, d, g, epsR, kappa = 1.0) {
+  return p * Math.exp(Math.PI * (d + g) / p) * Math.sqrt(P / (EPS0 * epsR)) / kappa;
+}
+
+// Unipolar tests for the same payloads (one electrode driven, the other at 0 V): drive voltage [V], in the same order.
+const UNI = [550, 550, 650, 750, 1000, 1200];
+// Bench lift tests, shown for comparison only. They are never fed back into the model.
+// Columns: real weight [g], total voltage [V], payload side c [mm] (not used by the model), V- [V] (V+ was fixed at 250 V).
+const BENCH = [[0.96, 500, 42, 250], [1.20, 525, 38, 275], [1.50, 600, 42, 350], [1.74, 675, 30, 425], [1.94, 950, 38, 700], [2.25, 1050, 40, 800]];
+// Interface closure. A fraction phi of the grip area is in contact (gap gc), the rest sits at the roughness gap gr; the pressure per V^2
+// is the area-weighted mean P1 = P1(gr) + phi (P1(gc) - P1(gr)), with each part solved by the field model on its own.
+const mixP = (P1c, P1r, phi) => P1r + phi * (P1c - P1r);
+// Contact fraction that makes the model hold mG grams at voltage V on grip area A [m2]. Outside 0..1 no physical value does.
+const phiFor = (mG, V, P1c, P1r, A) => (mG * 1e-3 * G_EARTH / (A * V * V) - P1r) / (P1c - P1r);
+// Contact fraction that minimises the rms error of ln V over the listed tests ([mass g, V]), clamped to 0..1.
+function fitPhi(tests, P1c, P1r, A) {
+  let s = 0;
+  for (const [m, V] of tests) s += Math.log(m * 1e-3 * G_EARTH / (A * V * V));
+  return Math.min(1, Math.max(0, (Math.exp(s / tests.length) - P1r) / (P1c - P1r)));
+}
+// Voltage that holds mG grams on grip area A [m2]: V = sqrt(m g / (P1 A)); P1 is the pressure per V^2.
+const voltageFor = (mG, P1, A) => Math.sqrt(mG * 1e-3 * G_EARTH / (P1 * A));
+// Heaviest load [g] that voltage V holds on grip area A.
+const loadFor = (V, P1, A) => P1 * A / G_EARTH * 1e3 * V * V;
+// </core>
+
+/* ---------- page ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const DEF = { V: 950, Vp: 250, w: 5.86, s: 1.0, d: 0, er: 3.4, g: 3.2, gc: 0.001, phi: 0.64, target: 'film', et: 3.4, t: 50, esub: 3.4, area: 60, mass: 2 };
+const NUM_IDS = ['V', 'Vp', 'w', 's', 'd', 'er', 'g', 'gc', 'phi', 'et', 't', 'esub', 'area', 'mass'];
+const SCHEMA = [
+  { group: 'Drive', rows: [
+    { id: 'V', label: 'Total voltage', sym: 'V⁺−V⁻', unit: 'V' },
+    { id: 'Vp', label: 'Positive supply', sym: 'V⁺', unit: 'V', hint: 'Fixed by the machine. Only the total V⁺ − V⁻ enters the model, and the results show the V⁻ it implies.' }] },
+  { group: 'Electrodes', rows: [
+    { id: 'w', label: 'Electrode width', sym: 'w', unit: 'mm' },
+    { id: 's', label: 'Gap between edges', sym: 's', unit: 'mm', hint: '', hintId: 'pitch-hint' }] },
+  { group: 'Layers above the electrodes', rows: [
+    { id: 'd', label: 'Coating thickness', sym: 'd', unit: 'µm' },
+    { id: 'er', label: 'Coating permittivity', sym: 'εr' }] },
+  { group: 'Film and electrode interface', rows: [
+    { id: 'g', label: 'Roughness gap', sym: 'g<sub>r</sub>', unit: 'µm', hint: 'Gap over the part of the area where the film does not touch. Manufactured electrodes are probably 3.2 to 10 µm rough. Measure it with a profilometer.' },
+    { id: 'gc', label: 'Gap in contact', sym: 'g<sub>c</sub>', unit: 'µm', hint: 'What is left where film and electrode touch, nanometre scale. Below about 5 nm the field solution is cut off and reads a few percent low.' },
+    { id: 'phi', label: 'Contact fraction', sym: 'φ', hint: 'Share of the grip area in contact, 0 to 1. The one empirical input. The buttons under the bench table fit it.' }] },
+  { group: 'Target', rows: [
+    { id: 'target', type: 'select', label: 'Target type', options: [['film', 'Dielectric film'], ['conductor', 'Floating conductor'], ['halfspace', 'Dielectric halfspace']] },
+    { id: 'et', label: 'Target permittivity', sym: 'εt' },
+    { id: 't', label: 'Film thickness', sym: 't', unit: 'µm' }] },
+  { group: 'Below the electrodes', rows: [{ id: 'esub', label: 'Substrate permittivity', sym: 'εsub' }] },
+  { group: 'Grip and payload', rows: [
+    { id: 'area', label: 'Free gripping area', unit: 'cm²', hint: 'Electroded area under the film, the same for every payload.' },
+    { id: 'mass', label: 'Payload mass', unit: 'g', hint: 'Optional. Leave blank to skip the voltage solve.' }] },
+];
+const LABELS = { V: 'total voltage', Vp: 'positive supply', w: 'electrode width', s: 'gap between electrodes', d: 'coating thickness', er: 'coating permittivity', g: 'roughness gap', gc: 'gap in contact', phi: 'contact fraction', et: 'target permittivity', t: 'film thickness', esub: 'substrate permittivity', area: 'free gripping area' };
+
+const state = { o: null, res: null, tab: 'a', sweepP: null, token: 0 };
+
+/* formatting */
+function sig(x, n = 4) {
+  if (!isFinite(x)) return '–';
+  if (x === 0) return '0';
+  const e = Math.floor(Math.log10(Math.abs(x)));
+  if (e < -3 || e >= 7) { const [m, ex] = x.toExponential(n - 1).split('e'); return (+m) + '×10<sup>' + parseInt(ex, 10) + '</sup>'; }
+  return x.toLocaleString('en-US', { maximumFractionDigits: Math.max(0, n - 1 - e), minimumFractionDigits: 0 });
+}
+const int = x => Math.round(x).toLocaleString('en-US');
+const num = x => String(+Number(x).toPrecision(4));
+const r1 = v => v.toFixed(1);
+
+/* form */
+function buildForm() {
+  let html = '';
+  for (const g of SCHEMA) {
+    html += `<fieldset><legend>${g.group}</legend>`;
+    for (const r of g.rows) {
+      const sym = r.sym ? ` <span class="sym">${r.sym}</span>` : '';
+      if (r.type === 'select') {
+        html += `<div class="row" data-row="${r.id}"><label for="in-${r.id}">${r.label}</label><select id="in-${r.id}">${r.options.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>`;
+      } else {
+        html += `<div class="row" data-row="${r.id}"><label for="in-${r.id}">${r.label}${sym}</label><input id="in-${r.id}" type="number" inputmode="decimal" step="any"><span class="unit">${r.unit || ''}</span></div>`;
+      }
+      if (r.hint !== undefined) html += `<p class="hint"${r.hintId ? ' id="' + r.hintId + '"' : ''}>${r.hint}</p>`;
+    }
+    html += '</fieldset>';
+  }
+  html += '<button type="button" id="reset" class="ghost">Reset to defaults</button>';
+  $('#form').innerHTML = html;
+}
+function setValues(v) {
+  for (const id of NUM_IDS) $('#in-' + id).value = v[id];
+  $('#in-target').value = v.target;
+}
+function readInputs() {
+  const o = {};
+  for (const id of NUM_IDS) { const t = $('#in-' + id).value.trim(); o[id] = t === '' ? NaN : Number(t); }
+  o.target = $('#in-target').value;
+  return o;
+}
+function syncDisabled(o) {
+  const noEt = o.target === 'conductor', noT = o.target !== 'film';
+  $('#in-et').disabled = noEt; $('[data-row="et"]').classList.toggle('off', noEt);
+  $('#in-t').disabled = noT; $('[data-row="t"]').classList.toggle('off', noT);
+}
+function validate(o) {
+  const need = ['V', 'Vp', 'w', 's', 'd', 'er', 'g', 'gc', 'phi', 'esub', 'area'];
+  if (o.target !== 'conductor') need.push('et');
+  if (o.target === 'film') need.push('t');
+  for (const id of need) if (!isFinite(o[id])) return `Enter a value for ${LABELS[id]}.`;
+  for (const id of ['w', 's', 'g', 'gc', 'er', 'esub', 'area']) if (!(o[id] > 0)) return `The ${LABELS[id]} must be greater than 0.`;
+  if (o.Vp < 0) return 'The positive supply cannot be negative.';
+  if (o.d < 0) return 'The coating thickness cannot be negative.';
+  if (o.target !== 'conductor' && !(o.et > 0)) return 'The target permittivity must be greater than 0.';
+  if (o.target === 'film' && !(o.t > 0)) return 'The film thickness must be greater than 0.';
+  if (!(o.gc < o.g)) return 'The gap in contact must be smaller than the roughness gap.';
+  if (o.phi < 0 || o.phi > 1) return 'The contact fraction must be between 0 and 1.';
+  if (isFinite(o.mass) && !(o.mass > 0)) return 'The payload must be greater than 0 g, or left blank.';
+  return null;
+}
+
+/* model glue (mm, um, cm^2 in; SI inside) */
+function geomFrom(o, gUm) {
+  return { w: o.w * 1e-3, s: o.s * 1e-3, d: o.d * 1e-6, epsR: o.er, g: gUm * 1e-6, target: o.target,
+    epsT: o.target === 'conductor' ? 1 : o.et, tFilm: o.target === 'film' ? o.t * 1e-6 : 0, epsSub: o.esub };
+}
+function legacyFor(o, geom, massKg, A) {
+  return legacyVoltage(massKg * G_EARTH / A, geom.w + geom.s, geom.d + (geom.target === 'film' ? geom.tFilm : 0), geom.g, geom.epsR);
+}
+const p1cache = new Map();
+function p1(geom) {   // pressure per V^2 for one gap, cached because the harmonic sum is the slow part
+  const key = JSON.stringify([geom.w, geom.s, geom.d, geom.epsR, geom.g, geom.target, geom.epsT, geom.tFilm, geom.epsSub]);
+  let v = p1cache.get(key);
+  if (v === undefined) { v = pressure(1.0, geom); if (p1cache.size > 300) p1cache.clear(); p1cache.set(key, v); }
+  return v;
+}
+function solve(o) {
+  const geomR = geomFrom(o, o.g), geomC = geomFrom(o, o.gc), A = o.area * 1e-4;
+  const P1r = p1(geomR), P1c = p1(geomC);
+  if (!(P1r > 0) || !(P1c > 0)) throw new Error('The model returned a non-positive pressure for these inputs.');
+  const Pm = mixP(P1c, P1r, o.phi);                  // Pa per V^2; pressure is exactly proportional to V^2
+  const res = { geomR, geomC, A, P1r, P1c, Pm, P: Pm * o.V * o.V,
+    mCur: loadFor(o.V, Pm, A), m0: loadFor(o.V, P1r, A), m1: loadFor(o.V, P1c, A) };   // heaviest load held, in g
+  res.F = res.mCur * 1e-3 * G_EARTH;
+  if (isFinite(o.mass)) {
+    res.VrCur = voltageFor(o.mass, Pm, A);
+    res.Vr0 = voltageFor(o.mass, P1r, A);
+    res.Vr1 = voltageFor(o.mass, P1c, A);
+    res.Vl = legacyFor(o, geomR, o.mass * 1e-3, A);
+    res.rCur = res.mCur / o.mass; res.r0 = res.m0 / o.mass; res.r1 = res.m1 / o.mass;
+    res.phiNeed = phiFor(o.mass, o.V, P1c, P1r, A);
+  }
+  return res;
+}
+
+/* results */
+function renderResults() {
+  const { o, res } = state;
+  const vminus = Vt => (Vt <= o.Vp ? '0 V, V⁺ alone is enough' : int(Vt - o.Vp) + ' V at V⁺ = ' + num(o.Vp) + ' V');
+  $('#res-ok').hidden = false; $('#res-err').hidden = true; $('#viz').classList.remove('stale');
+  $('#o-p').innerHTML = sig(res.P);
+  $('#o-f').innerHTML = sig(res.F * 1e3, 3);
+  $('#o-v').innerHTML = sig(o.V);
+  $('#o-gf').innerHTML = sig(res.mCur, 3);
+  $('#o-gf-u').innerHTML = `g-force at φ = ${num(o.phi)}. Roughness gap only: ${sig(res.m0, 3)} g. Full contact: ${sig(res.m1, 3)} g.`;
+  const el = $('#load');
+  if (res.VrCur == null) { el.innerHTML = '<p class="muted">Enter a payload mass to solve the voltage that holds it.</p>'; return; }
+  const diff = (res.Vl - res.VrCur) / res.VrCur * 100;
+  const need = res.phiNeed.toFixed(2), kind = res.rCur >= 1 ? 'ok' : res.r1 >= 1 ? 'mid' : 'bad';
+  const verdict = kind === 'ok'
+    ? `${sig(o.V)} V applied holds ${sig(res.rCur, 3)} times the payload weight at φ = ${num(o.phi)}. ` + (res.r0 >= 1 ? 'It would hold it with no contact at all.' : `It needs φ ≥ ${need}.`)
+    : kind === 'mid' ? `${sig(o.V)} V applied holds ${sig(res.rCur, 3)} times the payload weight at φ = ${num(o.phi)}. It needs φ ≥ ${need} to hold it.`
+    : `${sig(o.V)} V applied holds only ${sig(res.r1, 3)} times the payload weight, even with the whole grip area in contact.`;
+  el.innerHTML = `
+    <div class="load-head">To hold ${sig(o.mass, 3)} g</div>
+    <div class="load-grid">
+      <div><div class="lbl">This model</div><div class="val2">${int(res.VrCur)} V</div><div class="unit">φ = ${num(o.phi)}, V⁻ = ${vminus(res.VrCur)}</div></div>
+      <div><div class="lbl">Full contact</div><div class="val2 strip">${int(res.Vr1)} V</div><div class="unit">φ = 1, V⁻ = ${vminus(res.Vr1)}</div></div>
+      <div><div class="lbl">Roughness gap only</div><div class="val2 alt">${int(res.Vr0)} V</div><div class="unit">φ = 0, V⁻ = ${vminus(res.Vr0)}</div></div>
+      <div><div class="lbl">Single-harmonic formula</div><div class="val2 alt">${int(res.Vl)} V</div><div class="unit">at g<sub>r</sub>, ${diff >= 0 ? '+' : '−'}${Math.abs(diff).toFixed(0)} % against the model at φ = ${num(o.phi)}</div></div>
+    </div>
+    <p class="verdict ${kind}">${verdict}</p>`;
+}
+function showError(msg) {
+  $('#res-ok').hidden = true; const e = $('#res-err'); e.hidden = false; e.textContent = msg;
+  $('#viz').classList.add('stale');
+}
+
+/* layer cross-section */
+function renderStack() {
+  const { o } = state, host = $('#stack'), W = Math.max(300, Math.floor(host.clientWidth || 600));
+  const labelW = W < 480 ? 150 : 210, sw = W - labelW - 12;
+  const H = { tgt: 34, gap: 16, coat: o.d > 0 ? 14 : 0, el: 16, sub: 66 };
+  const labels = [], parts = [];
+  let y = 6;
+  const band = (cls, h, text, fill) => {
+    parts.push(`<rect class="${cls}" x="0" y="${y}" width="${sw}" height="${h}"${fill ? ` style="fill:${fill}"` : ''}/>`);
+    labels.push(`<text class="sv-lab" x="${sw + 12}" y="${y + h / 2 + 4}">${text}</text>`);
+    y += h;
+  };
+  let defs = '';
+  if (o.target === 'halfspace') {
+    defs = '<defs><linearGradient id="hs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--kapton);stop-opacity:0.05"/><stop offset="1" style="stop-color:var(--kapton);stop-opacity:1"/></linearGradient></defs>';
+    band('sv-film', H.tgt, `Halfspace · εr ${num(o.et)}`, 'url(#hs)');
+  } else if (o.target === 'film') band('sv-film', H.tgt, `Film ${num(o.t)} µm · εr ${num(o.et)}`);
+  else band('sv-cond', H.tgt, 'Floating conductor');
+  band('sv-gap', H.gap, `Roughness gap ${num(o.g)} µm`);
+  if (o.d > 0) band('sv-coat', H.coat, `Coating ${num(o.d)} µm · εr ${num(o.er)}`);
+  const yE = y;
+  parts.push(`<rect class="sv-sub" x="0" y="${yE}" width="${sw}" height="${H.el + H.sub}"/>`);
+  labels.push(`<text class="sv-lab" x="${sw + 12}" y="${yE + H.el / 2 + 4}">Electrodes ±V/2</text>`);
+  labels.push(`<text class="sv-lab" x="${sw + 12}" y="${yE + H.el + H.sub / 2 - 2}">Substrate · εr ${num(o.esub)}</text>`);
+  const n = 6, sc = sw / (n * o.w + (n - 1) * o.s), wp = o.w * sc, sp = o.s * sc;
+  for (let i = 0; i < n; i++) {
+    const x = i * (wp + sp);
+    parts.push(`<rect class="${i % 2 ? 'sv-neg' : 'sv-pos'}" x="${r1(x)}" y="${yE}" width="${r1(wp)}" height="${H.el}"/>`);
+    if (wp >= 14) parts.push(`<text class="sv-sign" x="${r1(x + wp / 2)}" y="${yE + 12}" text-anchor="middle">${i % 2 ? '−' : '+'}</text>`);
+  }
+  const dimY = yE + H.el + 9;
+  const dim = (x0, x1, sym, dimY = yE + H.el + 9) => {
+    parts.push(`<line class="sv-dim" x1="${r1(x0)}" x2="${r1(x1)}" y1="${dimY}" y2="${dimY}"/><line class="sv-dim" x1="${r1(x0)}" x2="${r1(x0)}" y1="${dimY - 3}" y2="${dimY + 3}"/><line class="sv-dim" x1="${r1(x1)}" x2="${r1(x1)}" y1="${dimY - 3}" y2="${dimY + 3}"/><text class="sv-sym" x="${r1((x0 + x1) / 2)}" y="${dimY + 16}" text-anchor="middle">${sym}</text>`);
+  };
+  const c1 = wp / 2, c2 = wp + sp + wp / 2, pY = yE + H.el + 39;
+  parts.push(`<line class="sv-cen" x1="${r1(c1)}" x2="${r1(c1)}" y1="${yE + H.el}" y2="${pY}"/><line class="sv-cen" x1="${r1(c2)}" x2="${r1(c2)}" y1="${yE + H.el}" y2="${pY}"/>`);
+  dim(0, wp, 'w'); dim(wp, wp + sp, 's'); dim(c1, c2, 'p', pY);
+  const total = yE + H.el + H.sub + 6;
+  host.innerHTML = `<svg width="${W}" height="${total}" viewBox="0 0 ${W} ${total}" role="img" aria-label="Cross-section of the layer stack">${defs}${parts.join('')}${labels.join('')}</svg>`;
+  $('#stack-cap').textContent = `Not to scale. Electrode width w = ${num(o.w)} mm is edge to edge, gap s = ${num(o.s)} mm, so the pitch p = w + s = ${num(o.w + o.s)} mm runs from the centre of one electrode to the centre of the next. The film is drawn flat. Over the contact fraction φ of the area it sits at the contact gap instead (${num(o.gc * 1000)} nm). This is a cross-section only. The real electrodes are laid out in a more complex pattern, and the model uses this section as if it repeated across the whole grip area.`;
+}
+
+/* bench comparison */
+const rmsPct = a => (a.length ? Math.sqrt(a.reduce((s, x) => s + x * x, 0) / a.length) * 100 : NaN);
+function benchRows() {
+  const { res } = state;
+  return BENCH.map((b, i) => {
+    const Vm = voltageFor(b[0], res.Pm, res.A);
+    return { n: i + 1, m: b[0], Vb: b[1], Vu: UNI[i], Vm, err: Vm / b[1] - 1, need: phiFor(b[0], b[1], res.P1c, res.P1r, res.A) };
+  });
+}
+function renderBench() {
+  const { o } = state, rows = benchRows();
+  const needTxt = x => (x > 1 ? '> 1' : x < 0 ? '< 0' : x.toFixed(2)), needCls = x => (x > 1 || x < 0 ? 'bad' : '');
+  let h = '<thead><tr><th>Test</th><th>Payload (g)</th><th>Bench V, bipolar</th><th>Bench V, unipolar</th><th>Model V</th><th>Model vs bench</th><th style="text-transform:none">φ needed</th></tr></thead><tbody>';
+  for (const r of rows) h += `<tr><td>${r.n}</td><td>${r.m}</td><td>${r.Vb}</td><td>${r.Vu}</td><td>${int(r.Vm)}</td><td class="${Math.abs(r.err) > 0.1 ? 'hi' : ''}">${r.err >= 0 ? '+' : '−'}${Math.abs(r.err * 100).toFixed(0)} %</td><td class="${needCls(r.need)}">${needTxt(r.need)}</td></tr>`;
+  $('#bench').innerHTML = h + '</tbody>';
+  const e = rows.map(r => r.err), nd = rows.map(r => r.need), rng = (a, b) => { const s = nd.slice(a, b); const lo = Math.min(...s), hi = Math.max(...s); return `${lo.toFixed(2)} to ${hi.toFixed(2)}`; };
+  $('#bench-cap').textContent = `At φ = ${num(o.phi)} the rms voltage error is ${rmsPct(e.slice(0, 4)).toFixed(0)} % over tests 1–4 and ${rmsPct(e.slice(4)).toFixed(0)} % over tests 5–6. φ needed is the contact fraction that reproduces each test exactly at the gaps entered, ${rng(0, 4)} for tests 1–4 and ${rng(4, 6)} for tests 5–6. It does not depend on the φ entered. The model sees only the voltage difference, so it gives the same voltage for bipolar and unipolar drive. V⁺ was fixed at 250 V in the bipolar tests, so V⁻ is the total minus 250 V.`;
+}
+function fitPhiTo(n) {
+  const { res } = state;
+  const phi = fitPhi(BENCH.slice(0, n).map(b => [b[0], b[1]]), res.P1c, res.P1r, res.A);
+  $('#in-phi').value = String(+phi.toFixed(3));
+  schedule();
+}
+
+/* charts */
+function niceScale(max, count = 5) {
+  if (!(max > 0)) max = 1;
+  const raw = max / count, mag = Math.pow(10, Math.floor(Math.log10(raw))), nn = raw / mag;
+  const step = (nn <= 1 ? 1 : nn <= 2 ? 2 : nn <= 5 ? 5 : 10) * mag, top = Math.ceil(max / step - 1e-9) * step, ticks = [];
+  for (let v = 0; v <= top + step * 1e-6; v += step) ticks.push(+v.toPrecision(12));
+  return { step, max: top, ticks };
+}
+function fmtTick(v, step) {
+  if (!step) return String(v);
+  const dec = step >= 1 ? 0 : Math.min(6, Math.ceil(-Math.log10(step) - 1e-9));
+  return v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function drawChart(host, c) {
+  const W = Math.max(280, Math.floor(host.clientWidth || 600)), H = 290, m = { l: 54, r: 18, t: 22, b: 44 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b, tx = c.xLog ? Math.log : v => v;
+  const a0 = tx(c.x[0]), a1 = tx(c.x[1]);
+  const X = v => m.l + (tx(v) - a0) / (a1 - a0) * iw, Y = v => m.t + ih - (v - c.y[0]) / (c.y[1] - c.y[0]) * ih;
+  let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${c.aria}">`;
+  for (const t of c.yTicks) { const y = Y(t); s += `<line class="gl" x1="${m.l}" x2="${W - m.r}" y1="${r1(y)}" y2="${r1(y)}"/><text class="ax" x="${m.l - 8}" y="${r1(y + 4)}" text-anchor="end">${fmtTick(t, c.yStep)}</text>`; }
+  for (const t of c.xTicks) { const x = X(t); s += `<line class="tk" x1="${r1(x)}" x2="${r1(x)}" y1="${m.t + ih}" y2="${m.t + ih + 4}"/><text class="ax" x="${r1(x)}" y="${m.t + ih + 17}" text-anchor="middle">${fmtTick(t, c.xStep)}</text>`; }
+  s += `<line class="axl" x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih}" y2="${m.t + ih}"/>`;
+  for (const h of c.hlines || []) { const y = Y(h.y); s += `<line class="ref" x1="${m.l}" x2="${W - m.r}" y1="${r1(y)}" y2="${r1(y)}"/>` + (h.label ? `<text class="lt" x="${m.l + 6}" y="${r1(y - 6)}">${h.label}</text>` : ''); }
+  for (const se of c.series) s += `<path class="${se.cls}" d="${se.pts.map((p, i) => (i ? 'L' : 'M') + r1(X(p[0])) + ' ' + r1(Y(p[1]))).join('')}${se.closed ? 'Z' : ''}"/>`;
+  for (const p of c.points || []) {
+    const x = X(p.x), y = Y(p.y), right = x > m.l + iw * 0.35;
+    const lx = right ? x - 9 : x + 9, ly = p.mode === 'above' ? y - 12 : right ? y - 10 : y + 18;
+    const anchor = p.mode === 'above' ? (x > m.l + iw * 0.6 ? 'end' : 'start') : right ? 'end' : 'start';
+    const lx2 = p.mode === 'above' ? (anchor === 'end' ? x + 4 : x - 4) : lx;
+    s += `<circle class="${p.cls}" cx="${r1(x)}" cy="${r1(y)}" r="${p.r || 5}"/>` + (p.label ? `<text class="lt" x="${r1(lx2)}" y="${r1(ly)}" text-anchor="${anchor}">${p.label}</text>` : '');
+  }
+  s += `<text class="ax" x="${m.l}" y="12">${c.yTitle}</text><text class="ax" x="${W - m.r}" y="${H - 6}" text-anchor="end">${c.xTitle}</text></svg>`;
+  host.innerHTML = s;
+}
+const n3 = x => String(+Number(x).toPrecision(3));   // plain-text number for SVG labels
+function chartA() {
+  const { o, res } = state, A = res.A;
+  const mReq = isFinite(o.mass) ? o.mass : 0, mBench = BENCH[BENCH.length - 1][0];
+  const xs = niceScale(Math.max(Math.min(res.mCur, 3 * mBench), mReq, mBench, 0.5) * 1.15), mmax = xs.max;
+  const Vc = m => voltageFor(m, res.Pm, A), V0 = m => voltageFor(m, res.P1r, A), V1 = m => voltageFor(m, res.P1c, A);
+  const vBench = Math.max(...BENCH.map(b => b[1]), ...UNI);
+  const ys = niceScale(Math.max(V0(mmax), o.V, vBench) * 1.04);
+  const cur = [[0, 0]], lo = [[0, 0]], hi = [[0, 0]];
+  for (let i = 1; i <= 120; i++) { const m = mmax * i / 120; cur.push([m, Vc(m)]); lo.push([m, V1(m)]); hi.push([m, V0(m)]); }
+  const band = lo.concat(hi.slice().reverse());
+  const points = BENCH.map(b => ({ x: b[0], y: b[1], cls: 'pt-data', r: 4.5 }));
+  BENCH.forEach((b, i) => points.push({ x: b[0], y: UNI[i], cls: 'pt-uni', r: 4.5 }));
+  if (res.mCur <= mmax) points.push({ x: res.mCur, y: o.V, cls: 'pt-fill' });
+  if (res.VrCur != null) points.push({ x: mReq, y: res.VrCur, cls: 'pt-ring', label: `${int(res.VrCur)} V`, mode: 'curve' });
+  drawChart($('#chart'), { aria: 'Required voltage against payload mass for the model at the entered contact fraction, with full contact, no contact and bench measurements', x: [0, mmax], y: [0, ys.max], xTicks: xs.ticks, xStep: xs.step, yTicks: ys.ticks, yStep: ys.step,
+    series: [{ cls: 's-band', pts: band, closed: true }, { cls: 's-alt', pts: hi }, { cls: 's-strip', pts: lo }, { cls: 's-main', pts: cur }], hlines: [{ y: o.V, label: '' }], points, xTitle: 'Payload mass (g)', yTitle: 'Voltage (V)' });
+  $('#legend').innerHTML = `<span>This model, φ = ${n3(o.phi)}</span><span class="l-strip">Full contact, φ = 1</span><span class="l-alt">Roughness gap only, φ = 0</span><span class="l-dot">Bipolar tests, V⁺ = 250 V</span><span class="l-uni">Unipolar tests</span><span class="l-ref">Applied voltage, ${n3(o.V)} V</span><span class="l-fill">Load it holds</span>` + (res.VrCur != null ? '<span class="l-pt">Your payload</span>' : '');
+  $('#chart-note').textContent = `The shaded band is everything the field model can say at a roughness gap of ${n3(o.g)} µm and a contact gap of ${n3(o.gc * 1000)} nm: no contact on the upper edge, full contact on the lower edge. The bench points that fall inside it are explained by a contact fraction between 0 and 1. Where the dotted line meets the solid curve is the heaviest load the applied voltage holds at the entered φ.`;
+}
+function chartB() {
+  const { o, res } = state, host = $('#chart');
+  if (res.VrCur == null) { host.innerHTML = '<div class="chart-empty">Enter a payload mass to plot the required voltage against the roughness gap.</div>'; $('#legend').innerHTML = ''; $('#chart-note').textContent = ''; return; }
+  const sp = state.sweepP;
+  if (!sp || sp.key !== sweepKey(o)) { host.innerHTML = '<div class="chart-empty">Computing sweep…</div>'; $('#legend').innerHTML = ''; return; }
+  const m = o.mass * 1e-3, A = res.A;
+  const sw = sp.gs.map((g, i) => {
+    const P1r = sp.P[i], Pm = g <= o.gc ? P1r : mixP(res.P1c, P1r, o.phi);
+    return { g, Vc: voltageFor(o.mass, Pm, A), V0: voltageFor(o.mass, P1r, A), Vl: legacyFor(o, Object.assign({}, res.geomR, { g: g * 1e-6 }), m, A) };
+  });
+  const lo = sw[0].g, hi = sw[sw.length - 1].g;
+  const ys = niceScale(Math.max(...sw.map(p => Math.max(p.V0, p.Vl)), res.Vr1) * 1.08);
+  const xt = []; for (let dec = Math.floor(Math.log10(lo)); dec <= Math.ceil(Math.log10(hi)); dec++) for (const mm of [1, 2, 5]) { const v = mm * Math.pow(10, dec); if (v >= lo * 0.999 && v <= hi * 1.001) xt.push(v); }
+  const band = [];
+  if (lo < 3.2 && hi > 10) band.push({ cls: 's-band', closed: true, pts: [[3.2, 0], [10, 0], [10, ys.max], [3.2, ys.max]] });
+  drawChart(host, { aria: 'Required voltage against roughness gap', xLog: true, x: [lo, hi], y: [0, ys.max], xTicks: xt, yTicks: ys.ticks, yStep: ys.step,
+    series: band.concat([{ cls: 's-alt', pts: sw.map(p => [p.g, p.V0]) }, { cls: 's-main', pts: sw.map(p => [p.g, p.Vc]) }, { cls: 's-strip', pts: sw.map(p => [p.g, p.Vl]) }]),
+    hlines: [{ y: res.Vr1, label: '' }],
+    points: [{ x: o.g, y: res.VrCur, cls: 'pt-ring', label: `${num(o.g)} µm: ${int(res.VrCur)} V`, mode: 'above' }],
+    xTitle: 'Roughness gap (µm, log scale)', yTitle: 'Required voltage (V)' });
+  $('#legend').innerHTML = `<span>This model, φ = ${n3(o.phi)}</span><span class="l-alt">Roughness gap only, φ = 0</span><span class="l-strip">Single-harmonic formula</span><span class="l-ref">Full contact</span><span class="l-band">3.2 to 10 µm, estimated roughness</span><span class="l-pt">Current roughness gap</span>`;
+  $('#chart-note').textContent = 'Every other input stays fixed while the roughness gap changes, including the contact fraction. With part of the area in contact, the solid curve moves little, because the contact area carries most of the force. The dashed blue curve (φ = 0) shows how strongly a single roughness gap would matter.';
+}
+function renderChart() { if (state.tab === 'a') chartA(); else chartB(); }
+
+function sweepKey(o) { return JSON.stringify([o.w, o.s, o.d, o.er, o.target, o.et, o.t, o.esub, o.g]); }   // what the cached pressures depend on
+let sweepTimer = 0;
+function startSweep() {
+  clearTimeout(sweepTimer);
+  const o = state.o, res = state.res;
+  if (state.tab !== 'b' || res.VrCur == null) return;
+  const key = sweepKey(o);
+  if (state.sweepP && state.sweepP.key === key) return;
+  const token = ++state.token, lo = Math.min(0.01, o.g), hi = Math.max(100, o.g), N = 16, gs = [];
+  for (let i = 0; i < N; i++) gs.push(lo * Math.pow(hi / lo, i / (N - 1)));
+  if (!gs.some(x => Math.abs(x - o.g) / o.g < 1e-6)) gs.push(o.g);
+  gs.sort((a, b) => a - b);
+  const P = [];
+  let i = 0;
+  const step = () => {
+    if (token !== state.token) return;
+    const t0 = performance.now();
+    while (i < gs.length && performance.now() - t0 < 30) { P.push(p1(Object.assign({}, res.geomR, { g: gs[i] * 1e-6 }))); i++; }
+    if (i < gs.length) setTimeout(step, 0);
+    else { state.sweepP = { key, gs, P }; renderChart(); }
+  };
+  sweepTimer = setTimeout(step, 120);
+}
+
+/* update loop */
+let raf = 0;
+function schedule() { cancelAnimationFrame(raf); raf = requestAnimationFrame(update); }
+function update() {
+  const o = readInputs(); syncDisabled(o);
+  const ph = $('#pitch-hint');
+  if (ph) ph.textContent = isFinite(o.w + o.s) ? `Pitch p = w + s = ${num(o.w + o.s)} mm, measured centre to centre.` : '';
+  const err = validate(o);
+  if (err) { showError(err); return; }
+  try { state.o = o; state.res = solve(o); }
+  catch (e) { showError(e.message || 'These inputs could not be solved.'); return; }
+  renderResults(); renderBench(); renderStack(); renderChart(); startSweep();
+}
+
+buildForm(); setValues(DEF);
+$('#form').addEventListener('input', schedule);
+$('#form').addEventListener('change', schedule);
+$('#form').addEventListener('submit', e => e.preventDefault());
+$('#reset').addEventListener('click', () => { setValues(DEF); schedule(); });
+$('#fit4').addEventListener('click', () => { if (state.res) fitPhiTo(4); });
+$('#fit6').addEventListener('click', () => { if (state.res) fitPhiTo(6); });
+for (const id of ['a', 'b']) $('#tab-' + id).addEventListener('click', () => {
+  state.tab = id;
+  $('#tab-a').setAttribute('aria-pressed', String(id === 'a')); $('#tab-b').setAttribute('aria-pressed', String(id === 'b'));
+  if (state.res) { renderChart(); startSweep(); }
+});
+let lastW = 0;
+if (window.ResizeObserver) new ResizeObserver(() => {
+  const w = Math.floor($('#viz').clientWidth);
+  if (w !== lastW) { lastW = w; if (state.res) { renderStack(); renderChart(); } }
+}).observe($('#viz'));
+update();
+</script>
+
+</body>
+</html>
